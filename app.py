@@ -121,6 +121,7 @@ def send_mail(to, subject, body):
 # --- UI FRAGMENTS AND SCHEMAS ---
 HTML_HEAD = """
 <head>
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='favicon.png') }}">
     <meta charset="UTF-8"><title>Customer Loyalty DSS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
