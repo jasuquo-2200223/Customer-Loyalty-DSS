@@ -1,0 +1,8 @@
+flask
+pandas
+numpy
+scipy
+scikit-learn
+itsdangerous
+werkzeug
+gunicorn
