@@ -18,7 +18,6 @@ DB_FILE = "loyalty_dss.db"
 # --- EMAIL CONFIGURATION ---
 MAIL_SERVER = "smtp.gmail.com"
 MAIL_PORT = 587
-MAIL_USE_TLS = True
 MAIL_USERNAME = "noreply.loyaltydss@gmail.com"
 MAIL_PASSWORD = "zsvwwcakhbljldqh"
 MAIL_DEFAULT_SENDER = f"Customer Loyalty DSS <{MAIL_USERNAME}>"
@@ -109,20 +108,53 @@ def log_audit_action(username, action):
         print(f"Audit Log Failure: {e}")
 
 def send_mail(to, subject, body):
-    msg = MIMEMultipart()
-    msg['From'], msg['To'], msg['Subject'] = MAIL_DEFAULT_SENDER, to, subject
-    msg.attach(MIMEText(body, 'plain'))
     try:
+        print(">>> CONNECTING SMTP")
+
         server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT)
+        server.set_debuglevel(1)  # 🔥 THIS IS THE GAME CHANGER
+
+        server.ehlo()
         server.starttls()
+        server.ehlo()
+
+        print(">>> LOGGING IN SMTP")
         server.login(MAIL_USERNAME, MAIL_PASSWORD)
+
+        msg = MIMEMultipart()
+        msg['From'] = MAIL_DEFAULT_SENDER
+        msg['To'] = to
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+
+        print(">>> SENDING EMAIL")
         server.send_message(msg)
+
         server.quit()
+
+        print(">>> EMAIL SENT SUCCESSFULLY")
         return True
+
     except Exception as e:
-        print(f"SMTP Error (Ignored for deployment): {e}")
-        # Return True so registration proceeds anyway
-        return True
+        print(">>> SMTP FAILED:", e)
+        return False
+    
+def init_db():
+    conn = get_db_connection()
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT,
+            first_name TEXT,
+            last_name TEXT,
+            email TEXT UNIQUE,
+            password TEXT,
+            password_obfuscated TEXT
+        )
+    """)
+    conn.commit()
+    conn.close()
+    print(">>> USERS TABLE READY")
 
 # --- UI FRAGMENTS AND SCHEMAS ---
 HTML_HEAD = """
@@ -1574,3 +1606,9 @@ def logout():
 
 if __name__ == '__main__':
     app.run(debug=True, port=5005)
+if __name__ == "__main__":
+    init_db()
+    app.run(debug=True) 
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)   
