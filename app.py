@@ -109,7 +109,7 @@ def log_audit_action(username, action):
 
 def send_mail(to, subject, body):
     try:
-        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT, timeout=15)
+        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT, timeout=5)
         server.ehlo()
         server.starttls()
         server.ehlo()
@@ -125,11 +125,10 @@ def send_mail(to, subject, body):
         server.send_message(msg)
         server.quit()
 
-        print("EMAIL SENT SUCCESSFULLY")
         return True
 
     except Exception as e:
-        print("SMTP ERROR:", e)
+        print("SMTP FAILED FAST:", e)
         return False
     
 def init_db():
