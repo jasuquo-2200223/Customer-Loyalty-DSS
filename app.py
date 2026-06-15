@@ -109,16 +109,11 @@ def log_audit_action(username, action):
 
 def send_mail(to, subject, body):
     try:
-        print(">>> CONNECTING SMTP")
-
-        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT)
-        server.set_debuglevel(1)  # 🔥 THIS IS THE GAME CHANGER
-
+        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT, timeout=15)
         server.ehlo()
         server.starttls()
         server.ehlo()
 
-        print(">>> LOGGING IN SMTP")
         server.login(MAIL_USERNAME, MAIL_PASSWORD)
 
         msg = MIMEMultipart()
@@ -127,16 +122,14 @@ def send_mail(to, subject, body):
         msg['Subject'] = subject
         msg.attach(MIMEText(body, 'plain'))
 
-        print(">>> SENDING EMAIL")
         server.send_message(msg)
-
         server.quit()
 
-        print(">>> EMAIL SENT SUCCESSFULLY")
+        print("EMAIL SENT SUCCESSFULLY")
         return True
 
     except Exception as e:
-        print(">>> SMTP FAILED:", e)
+        print("SMTP ERROR:", e)
         return False
     
 def init_db():
@@ -1357,6 +1350,7 @@ def reset_password(token):
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    print("REGISTER ROUTE STARTED")
     # Always initialize form defaults to prevent Jinja2 UndefinedError on GET
     form = {'f': '', 'l': '', 'u': '', 'e': ''}
     
@@ -1396,7 +1390,7 @@ def register():
 
             token = serializer.dumps(e, salt='email-confirm')
             link = url_for('verify', token=token, _external=True)
-
+            print("ABOUT TO SEND EMAIL")
             mail_sent = send_mail(
                 e,
                 "Verify Your Loyalty DSS Account",
