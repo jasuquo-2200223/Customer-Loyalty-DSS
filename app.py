@@ -30,7 +30,11 @@ temp_analysis_cache = {}
 
 # --- DATABASE CORE ---
 def get_db_connection():
-    conn = sqlite3.connect(DB_FILE)
+    conn = sqlite3.connect(
+        DB_FILE,
+        timeout=30,
+        check_same_thread=False
+    )
     conn.row_factory = sqlite3.Row
     return conn
 
@@ -1319,35 +1323,83 @@ def reset_password(token):
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    form = {}
+    # Always initialize form defaults to prevent Jinja2 UndefinedError on GET
+    form = {'f': '', 'l': '', 'u': '', 'e': ''}
+    
     if request.method == 'POST':
-        f, l, u, e, p, cp = request.form.get('f'), request.form.get('l'), request.form.get('u'), request.form.get('e'), request.form.get('p'), request.form.get('cp')
-        form = {'f':f, 'l':l, 'u':u, 'e':e}
-        if p != cp: flash("Passwords match error", "error"); return render_template_string(REG_TEMPLATE, **form)
-        if not is_valid_email(e): flash("Invalid email format", "error"); return render_template_string(REG_TEMPLATE, **form)
+        f = request.form.get('f', '')
+        l = request.form.get('l', '')
+        u = request.form.get('u', '')
+        e = request.form.get('e', '')
+        p = request.form.get('p', '')
+        cp = request.form.get('cp', '')
+        form = {'f': f, 'l': l, 'u': u, 'e': e}
+
+        if p != cp:
+            flash("Passwords do not match.", "error")
+            return render_template_string(REG_TEMPLATE, **form)
+        
+        if not is_valid_email(e):
+            flash("Invalid email format.", "error")
+            return render_template_string(REG_TEMPLATE, **form)
+        
         conn = get_db_connection()
-        if conn.execute("SELECT 1 FROM users WHERE email=?", (e,)).fetchone(): flash("Email registered", "error"); conn.close(); return render_template_string(REG_TEMPLATE, **form)
-        hashed = generate_password_hash(p)
         try:
-            import base64
+            existing = conn.execute("SELECT 1 FROM users WHERE email=? OR username=?", (e, u)).fetchone()
+            if existing:
+                flash("Email or username already registered.", "error")
+                conn.close()
+                return render_template_string(REG_TEMPLATE, **form)
+
+            hashed = generate_password_hash(p)
             encoded_password = base64.b64encode(p.encode('utf-8')).decode('utf-8')
-            
-            conn.execute("INSERT INTO users (username, first_name, last_name, email, password, password_obfuscated) VALUES (?,?,?,?,?,?)", 
-                         (u,f,l,e,hashed,encoded_password))
-            conn.commit(); conn.close()
+
+            conn.execute(
+                "INSERT INTO users (username, first_name, last_name, email, password, password_obfuscated) VALUES (?,?,?,?,?,?)",
+                (u, f, l, e, hashed, encoded_password)
+            )
+            conn.commit()
+
             token = serializer.dumps(e, salt='email-confirm')
             link = url_for('verify', token=token, _external=True)
-            
-            log_audit_action(u, f"Registered new manager account with email {e}.")
-            if send_mail(e, "Verify Loyalty DSS Account", f"Click here to activate: {link}"):
-                flash("Check your inbox for a verification link.", "success")
+
+            mail_sent = send_mail(
+                e,
+                "Verify Your Loyalty DSS Account",
+                f"Click the link below to activate your account:\n\n{link}\n\nThis link expires in 1 hour."
+            )
+
+            if mail_sent:
+                flash("Registration successful! Check your inbox for a verification link.", "success")
                 return redirect('/login')
             else:
-                return f"""<div style='text-align:center; padding-top:100px; font-family:sans-serif;'><h2>Simulated link (SMTP Failed)</h2><p>Click below to verify {e}:</p><a href='/verify/{token}' style='color:indigo; font-weight:bold; font-size:24px; text-decoration:none;'>Verify & Login</a></div>"""
+                # SMTP blocked (common on Render free tier) — show manual verification link
+                return f"""
+                    <!DOCTYPE html><html><head><title>Verify Account</title>
+                    <script src="https://cdn.tailwindcss.com"></script></head>
+                    <body class="bg-slate-900 flex items-center justify-center min-h-screen">
+                        <div class="bg-white p-12 rounded-3xl shadow-2xl text-center max-w-md w-full">
+                            <div class="text-5xl mb-6">📧</div>
+                            <h2 class="text-2xl font-black text-slate-800 mb-2">One More Step!</h2>
+                            <p class="text-slate-500 text-sm mb-6">Email delivery is unavailable on this server. Click below to manually verify your account:</p>
+                            <a href="/verify/{token}" class="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black inline-block hover:bg-indigo-700 transition">
+                                ✅ Verify & Activate Account
+                            </a>
+                            <p class="mt-6 text-xs text-slate-400"><a href="/login" class="hover:underline">Back to Login</a></p>
+                        </div>
+                    </body></html>
+                """
         except Exception as err:
-            flash(f"Username taken or error: {err}", "error"); return render_template_string(REG_TEMPLATE, **form)
-    return render_template_string(REG_TEMPLATE, **form)
+            conn.close()
+            flash(f"Registration failed: {str(err)}", "error")
+            return render_template_string(REG_TEMPLATE, **form)
+        finally:
+            try:
+                conn.close()
+            except Exception:
+                pass
 
+    return render_template_string(REG_TEMPLATE, **form)
 REG_TEMPLATE = """
 <!DOCTYPE html><html>"""+HTML_HEAD+"""<body class="bg-slate-900 flex items-center justify-center min-h-screen border border-slate-200">
     <div class="bg-white p-12 rounded-[3rem] shadow-2xl w-full max-w-lg">
