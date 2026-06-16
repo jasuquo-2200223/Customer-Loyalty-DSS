@@ -16,10 +16,10 @@ app.secret_key = "loyalty_dss_production_dataset_sync_key"
 DB_FILE = "loyalty_dss.db"
 
 # --- EMAIL CONFIGURATION ---
-MAIL_SERVER = "smtp.gmail.com"
+MAIL_SERVER = "sandbox.smtp.mailtrap.io"
 MAIL_PORT = 587
-MAIL_USERNAME = "noreply.loyaltydss@gmail.com"
-MAIL_PASSWORD = "zsvwwcakhbljldqh"
+MAIL_USERNAME = "779c2307e7526a"
+MAIL_PASSWORD = "ce3ef08c21542b"
 MAIL_DEFAULT_SENDER = f"Customer Loyalty DSS <{MAIL_USERNAME}>"
 
 serializer = URLSafeTimedSerializer(app.secret_key)
@@ -109,11 +109,8 @@ def log_audit_action(username, action):
 
 def send_mail(to, subject, body):
     try:
-        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT, timeout=5)
-        server.ehlo()
+        server = smtplib.SMTP(MAIL_SERVER, MAIL_PORT, timeout=10)
         server.starttls()
-        server.ehlo()
-
         server.login(MAIL_USERNAME, MAIL_PASSWORD)
 
         msg = MIMEMultipart()
@@ -124,13 +121,12 @@ def send_mail(to, subject, body):
 
         server.send_message(msg)
         server.quit()
-
         return True
 
     except Exception as e:
-        print("SMTP FAILED FAST:", e)
+        print("MAIL ERROR:", e)
         return False
-    
+        
 def init_db():
     conn = get_db_connection()
     conn.execute("""
